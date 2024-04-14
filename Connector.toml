@@ -1,0 +1,39 @@
+[package]
+name = "imap-source"
+group = "infinyon"
+version = "0.1.0"
+apiVersion = "0.1.0"
+fluvio = "0.10.14"
+description = "Imap source connector"
+license = "MIT OR Apache-2.0"
+visibility = "public"
+
+[direction]
+source = true
+
+[deployment]
+binary = "imap-source"
+
+[custom]
+name = "imap"
+required = ["host", "port", "user", "password"]
+
+[custom.properties.host]
+title = "Host"
+description = "IMAP host"
+type = "string"
+
+[custom.properties.port]
+title = "Port"
+description = "IMAP port"
+type = "string"
+
+[custom.properties.user]
+title = "User"
+description = "IMAP Username"
+type = "string"
+
+[custom.properties.password]
+title = "Password"
+description = "IMAP Password"
+type = "string"

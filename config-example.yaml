@@ -1,0 +1,9 @@
+meta:
+  version: latest
+  name: my-imap-connector
+  type: imap-source
+  topic: imap-topic
+imap:  
+  host: "localhost"
+  user: "user"
+  password: "pass"

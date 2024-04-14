@@ -1,0 +1,26 @@
+[package]
+name = "imap-source"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache 2.0"
+description = "Fluvio Imap source connector"
+
+[dependencies]
+async-trait = { version = "0.1", default-features = false}
+futures = { version = "0.3", default-features = false}
+anyhow = { version = "1.0" }
+async-std = { version = "1.12",  default-features = false, features = ["attributes", "tokio1"]}
+serde = {version = "1.0", default-features = false, features = ["derive"]}
+serde_json = { version = "1.0", default-features = false, features = ["preserve_order"] }
+thiserror = { version = "1.0", default-features = false }
+#fluvio = { git = "https://github.com/infinyon/fluvio", tag = "v0.11.5" }
+#fluvio-connector-common = { git = "https://github.com/infinyon/fluvio", tag = "v0.11.5", features = ["derive"] }
+fluvio = { git = "https://github.com/infinyon/fluvio", rev = "06450c8" }
+fluvio-connector-common = { git = "https://github.com/infinyon/fluvio", rev = "06450c8", features = ["derive"] }
+async-imap = { version = "0.9" }
+async-native-tls = "0.5.0"
+
+[profile.release-lto]
+inherits = "release"
+lto = true
