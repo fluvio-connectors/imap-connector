@@ -5,5 +5,7 @@ meta:
   topic: imap-topic
 imap:  
   host: "localhost"
+  port: "993"
   user: "user"
   password: "pass"
+  dangerous_cert: false

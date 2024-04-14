@@ -7,4 +7,5 @@ pub(crate) struct ImapConfig {
     pub port: String,
     pub user: String,
     pub password: String,
+    pub dangerous_cert: bool,
 }
