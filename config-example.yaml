@@ -8,4 +8,6 @@ imap:
   port: "993"
   user: "user"
   password: "pass"
+  mailbox: "INBOX"
+  fetch: "(UID FLAGS INTERNALDATE RFC822.SIZE RFC822 RFC822.HEADER ENVELOPE BODYSTRUCTURE)" 
   dangerous_cert: false

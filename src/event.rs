@@ -1,10 +1,110 @@
+use async_imap::imap_proto::Envelope as AsyncImapEnvelope;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct ImapEnvelope {
+    pub date: Option<String>,
+    pub subject: Option<String>,
+    pub from: Option<Vec<AddressPart>>,
+    pub sender: Option<Vec<AddressPart>>,
+    pub reply_to: Option<Vec<AddressPart>>,
+    pub to: Option<Vec<AddressPart>>,
+    pub cc: Option<Vec<AddressPart>>,
+    pub bcc: Option<Vec<AddressPart>>,
+    pub in_reply_to: Option<String>,
+    pub message_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct AddressPart {
+    pub name: Option<String>,
+    pub adl: Option<String>,
+    pub mailbox: Option<String>,
+    pub host: Option<String>,
+}
+
+impl From<&async_imap::imap_proto::types::Address<'_>> for AddressPart {
+    fn from(address: &async_imap::imap_proto::types::Address<'_>) -> Self {
+        let mut rec = AddressPart::default();
+        if let Some(name) = &address.name {
+            let str_name: String = String::from_utf8_lossy(name).into();
+            rec.name = Some(str_name);
+        }
+        if let Some(adl) = &address.adl {
+            let str_adl: String = String::from_utf8_lossy(adl).into();
+            rec.adl = Some(str_adl);
+        }
+        if let Some(mailbox) = &address.mailbox {
+            let str_mailbox: String = String::from_utf8_lossy(mailbox).into();
+            rec.mailbox = Some(str_mailbox);
+        }
+        if let Some(host) = &address.host {
+            let str_host: String = String::from_utf8_lossy(host).into();
+            rec.host = Some(str_host);
+        }
+        rec
+    }
+}
+
+impl From<&&AsyncImapEnvelope<'_>> for ImapEnvelope {
+    fn from(envelope: &&AsyncImapEnvelope<'_>) -> Self {
+        let mut rec = ImapEnvelope::default();
+        if let Some(date) = &envelope.date {
+            let str_date: String = String::from_utf8_lossy(date).into();
+            rec.date = Some(str_date);
+        }
+        if let Some(subject) = &envelope.subject {
+            let str_subject: String = String::from_utf8_lossy(subject).into();
+            rec.subject = Some(str_subject);
+        }
+        if let Some(from) = &envelope.from {
+            let vec_froms: Vec<AddressPart> = from.iter().map(|f| f.into()).collect();
+            rec.from = Some(vec_froms);
+        }
+        if let Some(sender) = &envelope.sender {
+            let vec_sender: Vec<AddressPart> = sender.iter().map(|f| f.into()).collect();
+            rec.sender = Some(vec_sender);
+        }
+        if let Some(reply_to) = &envelope.reply_to {
+            let vec_reply_to: Vec<AddressPart> = reply_to.iter().map(|f| f.into()).collect();
+            rec.reply_to = Some(vec_reply_to);
+        }
+        if let Some(to) = &envelope.to {
+            let vec_to: Vec<AddressPart> = to.iter().map(|f| f.into()).collect();
+            rec.to = Some(vec_to);
+        }
+        if let Some(cc) = &envelope.cc {
+            let vec_cc: Vec<AddressPart> = cc.iter().map(|f| f.into()).collect();
+            rec.cc = Some(vec_cc);
+        }
+        if let Some(bcc) = &envelope.bcc {
+            let vec_bcc: Vec<AddressPart> = bcc.iter().map(|f| f.into()).collect();
+            rec.bcc = Some(vec_bcc);
+        }
+        if let Some(in_reply_to) = &envelope.in_reply_to {
+            let str_in_reply_to: String = String::from_utf8_lossy(in_reply_to).into();
+            rec.in_reply_to = Some(str_in_reply_to);
+        }
+        if let Some(message_id) = &envelope.message_id {
+            let str_message_id: String = String::from_utf8_lossy(message_id).into();
+            rec.message_id = Some(str_message_id);
+        }
+        dbg!(&rec);
+        rec
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct ImapEvent {
-    pub mailbox: String,
-    pub mail_data: Vec<u8>,
+    pub uid: u32,
+    pub internaldate: Option<String>,
+    pub flags: Option<Vec<String>>,
+    // TODO - Placeholders
+    pub header: Option<bool>,
+    pub text: Option<bool>,
+    pub envelope: Option<ImapEnvelope>,
+    pub body_structure: Option<bool>,
 }
 
 #[derive(Error, Debug)]

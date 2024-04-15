@@ -11,7 +11,9 @@ Reads from IMAP and writes to Fluvio topic.
 | port                | -        | Number         | IMAP server port - 143 for plaintext, 993 with TLS                                                             |
 | user                | -        | String         | Username for plaintext login - must be over TLS - e.g. STARTTLS over 143 or directly over 993 TLS port         |
 | password            | -        | String         | Password for plaintext login - must be over TLS                                                                |
-| dangerous_cert      | -        | String         | DANGEROUS: Upon development / debugging skip TLS cert verify - true (default false)                            |
+| mailbox             | -        | String         | Mailbox to SELECT e.g. INBOX, Junk Mail etc. - deploy connector instance per Mailbox streaming                 |
+| fetch               | -        | String         | e.g. (UID FLAGS INTERNALDATE RFC822.SIZE RFC822 RFC822.HEADER ENVELOPE BODYSTRUCTURE)                          |
+| dangerous_cert      | false    | String         | DANGEROUS: Upon development / debugging skip TLS cert verify - true (default false)                            |
 
 Various SASL authentication schemes can be implemented if needed, let us know in issues if one doesn't exist already.
 
