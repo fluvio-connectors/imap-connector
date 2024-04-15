@@ -4,23 +4,37 @@ use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ImapEnvelope {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<Vec<AddressPart>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sender: Option<Vec<AddressPart>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<Vec<AddressPart>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub to: Option<Vec<AddressPart>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cc: Option<Vec<AddressPart>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bcc: Option<Vec<AddressPart>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub in_reply_to: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AddressPart {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub adl: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mailbox: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
 }
 
@@ -90,7 +104,6 @@ impl From<&&AsyncImapEnvelope<'_>> for ImapEnvelope {
             let str_message_id: String = String::from_utf8_lossy(message_id).into();
             rec.message_id = Some(str_message_id);
         }
-        dbg!(&rec);
         rec
     }
 }
@@ -98,12 +111,18 @@ impl From<&&AsyncImapEnvelope<'_>> for ImapEnvelope {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct ImapEvent {
     pub uid: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub internaldate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub flags: Option<Vec<String>>,
     // TODO - Placeholders
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub header: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub envelope: Option<ImapEnvelope>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub body_structure: Option<bool>,
 }
 
@@ -119,12 +138,3 @@ impl TryFrom<ImapEvent> for String {
         serde_json::to_string(&event).map_err(|e| ImapEventError::InternalConversion(e.to_string()))
     }
 }
-
-/*
-impl From<NNNN> for ImapEvent {
-    fn from(n: NNN) -> Self {
-        Self {
-        }
-    }
-}
-*/
