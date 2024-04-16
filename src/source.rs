@@ -7,10 +7,10 @@ use async_std::net::TcpStream;
 use async_std::task::spawn;
 use async_trait::async_trait;
 use fluvio::Offset;
+#[allow(unused_imports)]
 use fluvio_connector_common::tracing::{debug, info, trace};
 use fluvio_connector_common::Source;
 use futures::{stream::LocalBoxStream, StreamExt};
-use std::str::FromStr;
 
 const CHANNEL_BUFFER_SIZE: usize = 10000;
 
@@ -22,6 +22,8 @@ pub(crate) struct ImapSource {
     password: String,
     mailbox: String,
     fetch: String,
+    mode_bytes: bool,
+    mode_utf8_lossy: bool,
     dangerous_cert: bool,
 }
 
@@ -33,6 +35,8 @@ impl ImapSource {
         let password = config.password.clone();
         let mailbox = config.mailbox.clone();
         let fetch = config.fetch.clone();
+        let mode_utf8_lossy = config.mode_utf8_lossy;
+        let mode_bytes = config.mode_bytes;
         let dangerous_cert = config.dangerous_cert;
 
         Ok(Self {
@@ -42,6 +46,8 @@ impl ImapSource {
             password,
             mailbox,
             fetch,
+            mode_utf8_lossy,
+            mode_bytes,
             dangerous_cert,
         })
     }
@@ -67,14 +73,14 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
 
     info!("TCP TLS Connect");
 
-    let mut idle_stream = TlsConnector::new()
+    let idle_stream = TlsConnector::new()
         .use_sni(true)
         .danger_accept_invalid_certs(config.dangerous_cert)
         .connect(config.host.clone(), idle_stream)
         .await
         .unwrap();
 
-    let mut fetch_stream = TlsConnector::new()
+    let fetch_stream = TlsConnector::new()
         .use_sni(true)
         .danger_accept_invalid_certs(config.dangerous_cert)
         .connect(config.host.clone(), fetch_stream)
@@ -96,7 +102,7 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
         .await
         .map_err(|(err, _client)| err)?;
 
-    /*
+    /* TODO
     let mut list = fetch_session.list(Some("*"), Some("*")).await.unwrap();
     while let Some(item) = list.next().await {
 
@@ -106,7 +112,7 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
      */
 
     let idle_inbox = idle_session.select(&config.mailbox).await?;
-    let fetch_inbox = fetch_session.select(&config.mailbox).await?;
+    let _fetch_inbox = fetch_session.select(&config.mailbox).await?;
 
     info!("IMAP Connecting Mailbox {}", &config.mailbox);
 
@@ -119,9 +125,8 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
 
         let mut to_fetch = vec![];
         for search_item in &search {
-            to_fetch.push(search_item.clone());
+            to_fetch.push(*search_item);
         }
-        //drop(to_fetch);
         drop(search);
 
         for fetch_uid in &to_fetch {
@@ -131,7 +136,10 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
                 let mut rec = ImapEvent {
                     uid: *fetch_uid,
                     flags: None,
+                    body: None,
+                    body_utf8_lossy: None,
                     header: None,
+                    header_utf8_lossy: None,
                     text: None,
                     envelope: None,
                     internaldate: None,
@@ -141,33 +149,42 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
                 let item = &item_u.unwrap();
 
                 if let Some(header) = item.header() {
-                    let string_header = String::from_utf8_lossy(header);
-                    info!("IMAP Fetch headers = {}", string_header);
+                    if config.mode_bytes {
+                        rec.header = Some(header.into());
+                    }
+                    if config.mode_utf8_lossy {
+                        let string_header = String::from_utf8_lossy(header).to_string();
+                        rec.header_utf8_lossy = Some(string_header);
+                    }
                 }
                 if let Some(envelope) = &item.envelope() {
                     let imap_envelope: ImapEnvelope = envelope.into();
                     rec.envelope = Some(imap_envelope);
                 }
+                if let Some(body) = &item.body() {
+                    if config.mode_bytes {
+                        rec.body = Some(body.to_vec());
+                    }
+                    if config.mode_utf8_lossy {
+                        let body_utf8_lossy: String = String::from_utf8_lossy(body).to_string();
+                        rec.body_utf8_lossy = Some(body_utf8_lossy);
+                    }
+                }
+                if let Some(internal_date) = &item.internal_date() {
+                    rec.internaldate = Some(internal_date.to_rfc3339());
+                }
 
                 tx.send(rec.try_into()?).await?;
-                drop(item);
             }
         }
 
         info!("IMAP Idling & Waiting for 5 minutes");
 
         idle_handle.init().await?;
-        let (idle_fut, ss) = idle_handle.wait_with_timeout(std::time::Duration::from_secs(60 * 5));
+        let (idle_fut, _ss) = idle_handle.wait_with_timeout(std::time::Duration::from_secs(60 * 5));
 
         let idle_res = idle_fut.await?;
 
         info!("IMAP idle_res = {:?}", idle_res);
     }
-    /*
-        while let Some(msg) = imap_sub.next().await {
-            trace!("Imap got: {msg:?}");
-            let imap_event: ImapEvent = msg.into();
-            tx.send(imap_event.try_into()?).await?;
-    }
-        */
 }

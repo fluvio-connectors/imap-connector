@@ -115,9 +115,15 @@ pub(crate) struct ImapEvent {
     pub internaldate: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flags: Option<Vec<String>>,
-    // TODO - Placeholders
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub header: Option<bool>,
+    pub body: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_utf8_lossy: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_utf8_lossy: Option<String>,
+    // Placeholders
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

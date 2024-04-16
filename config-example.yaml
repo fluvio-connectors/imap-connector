@@ -9,5 +9,8 @@ imap:
   user: "user"
   password: "pass"
   mailbox: "INBOX"
-  fetch: "(UID FLAGS INTERNALDATE RFC822.SIZE RFC822 RFC822.HEADER ENVELOPE BODYSTRUCTURE)" 
+  search: "NEW"
+  fetch: "(UID FLAGS INTERNALDATE RFC822.SIZE RFC822 RFC822.HEADER ENVELOPE BODYSTRUCTURE)"
+  mode_bytes: false
+  mode_utf8_lossy: true
   dangerous_cert: false
