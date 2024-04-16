@@ -21,6 +21,7 @@ pub(crate) struct ImapSource {
     user: String,
     password: String,
     mailbox: String,
+    search: String,
     fetch: String,
     mode_bytes: bool,
     mode_utf8_lossy: bool,
@@ -34,6 +35,7 @@ impl ImapSource {
         let user = config.user.clone();
         let password = config.password.clone();
         let mailbox = config.mailbox.clone();
+        let search = config.search.clone();
         let fetch = config.fetch.clone();
         let mode_utf8_lossy = config.mode_utf8_lossy;
         let mode_bytes = config.mode_bytes;
@@ -45,6 +47,7 @@ impl ImapSource {
             user,
             password,
             mailbox,
+            search,
             fetch,
             mode_utf8_lossy,
             mode_bytes,
@@ -121,7 +124,7 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
     let mut idle_handle = idle_session.idle();
 
     loop {
-        let search = fetch_session.uid_search("NEW").await?;
+        let search = fetch_session.uid_search(config.search.clone()).await?;
 
         let mut to_fetch = vec![];
         for search_item in &search {
@@ -131,7 +134,9 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
 
         for fetch_uid in &to_fetch {
             info!("Fetching UID {:?}", fetch_uid);
-            let mut fetch_new = fetch_session.uid_fetch(fetch_uid.to_string(), "(UID FLAGS INTERNALDATE RFC822.SIZE RFC822 RFC822.HEADER ENVELOPE BODYSTRUCTURE)").await?;
+            let mut fetch_new = fetch_session
+                .uid_fetch(fetch_uid.to_string(), config.fetch.clone())
+                .await?;
             while let Some(item_u) = fetch_new.next().await {
                 let mut rec = ImapEvent {
                     uid: *fetch_uid,

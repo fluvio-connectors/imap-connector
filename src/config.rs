@@ -8,6 +8,7 @@ pub(crate) struct ImapConfig {
     pub user: String,
     pub password: String,
     pub mailbox: String,
+    pub search: String,
     pub fetch: String,
     pub mode_bytes: bool,
     pub mode_utf8_lossy: bool,
