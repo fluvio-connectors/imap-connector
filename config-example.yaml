@@ -1,0 +1,16 @@
+meta:
+  version: latest
+  name: my-imap-connector
+  type: imap-source
+  topic: imap-topic
+imap:  
+  host: "localhost"
+  port: "993"
+  user: "user"
+  password: "pass"
+  mailbox: "INBOX"
+  search: "NEW"
+  fetch: "(UID FLAGS INTERNALDATE RFC822.SIZE RFC822 RFC822.HEADER ENVELOPE BODYSTRUCTURE)"
+  mode_bytes: false
+  mode_utf8_lossy: true
+  dangerous_cert: false
