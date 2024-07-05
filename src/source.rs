@@ -161,7 +161,7 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
         None => info!("config.dkim_unathenticated_move was not set - Will not move any DKIM Non-Authenticated emails."),
     }
 
-    if ensure_mailboxes_exist.len() > 0 {
+    if !ensure_mailboxes_exist.is_empty() {
         let mut list = fetch_session.list(Some("*"), Some("*")).await.unwrap();
 
         while let Some(item) = list.next().await {
@@ -282,22 +282,16 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
                 // Move the mail in case Authenticated destination folder is set
                 // and dkim_authenticated == true
                 if let Some(dkim_move_to) = &config.dkim_authenticated_move {
-                    match rec.dkim_authenticated {
-                        Some(true) => {
-                            rec.moved_to = Some(dkim_move_to.clone());
-                        }
-                        _ => {}
+                    if let Some(true) = rec.dkim_authenticated {
+                        rec.moved_to = Some(dkim_move_to.clone());
                     }
                 }
 
                 // Move the mail in case Unauthenticated destination folder is set
                 // and dkim_authenticated == false
                 if let Some(dkim_move_to) = &config.dkim_unauthenticated_move {
-                    match rec.dkim_authenticated {
-                        Some(false) => {
-                            rec.moved_to = Some(dkim_move_to.clone());
-                        }
-                        _ => {}
+                    if let Some(false) = rec.dkim_authenticated {
+                        rec.moved_to = Some(dkim_move_to.clone());
                     }
                 }
 
