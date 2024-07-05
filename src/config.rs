@@ -12,5 +12,9 @@ pub(crate) struct ImapConfig {
     pub fetch: String,
     pub mode_bytes: bool,
     pub mode_utf8_lossy: bool,
+    pub mode_parser: bool,
+    pub mode_dkim_auth: bool,
+    pub dkim_authenticated_move: Option<String>,
+    pub dkim_unauthenticated_move: Option<String>,
     pub dangerous_cert: bool,
 }
