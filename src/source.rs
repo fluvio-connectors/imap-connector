@@ -8,9 +8,13 @@ use async_std::task::spawn;
 use async_trait::async_trait;
 use fluvio::Offset;
 #[allow(unused_imports)]
-use fluvio_connector_common::tracing::{debug, info, trace};
+use fluvio_connector_common::tracing::{debug, info, trace, warn};
 use fluvio_connector_common::Source;
 use futures::{stream::LocalBoxStream, StreamExt};
+
+use msg_auth_status::alloc_yes::{MessageAuthStatus, ReturnPathVerifier, ReturnPathVerifierStatus};
+
+use std::collections::HashMap;
 
 const CHANNEL_BUFFER_SIZE: usize = 10000;
 
@@ -25,6 +29,10 @@ pub(crate) struct ImapSource {
     fetch: String,
     mode_bytes: bool,
     mode_utf8_lossy: bool,
+    mode_parser: bool,
+    mode_dkim_auth: bool,
+    dkim_authenticated_move: Option<String>,
+    dkim_unauthenticated_move: Option<String>,
     dangerous_cert: bool,
 }
 
@@ -39,6 +47,10 @@ impl ImapSource {
         let fetch = config.fetch.clone();
         let mode_utf8_lossy = config.mode_utf8_lossy;
         let mode_bytes = config.mode_bytes;
+        let mode_parser = config.mode_parser;
+        let mode_dkim_auth = config.mode_dkim_auth;
+        let dkim_authenticated_move = config.dkim_authenticated_move.clone();
+        let dkim_unauthenticated_move = config.dkim_unauthenticated_move.clone();
         let dangerous_cert = config.dangerous_cert;
 
         Ok(Self {
@@ -51,6 +63,10 @@ impl ImapSource {
             fetch,
             mode_utf8_lossy,
             mode_bytes,
+            mode_parser,
+            mode_dkim_auth,
+            dkim_authenticated_move,
+            dkim_unauthenticated_move,
             dangerous_cert,
         })
     }
@@ -105,21 +121,73 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
         .await
         .map_err(|(err, _client)| err)?;
 
-    /* TODO
-    let mut list = fetch_session.list(Some("*"), Some("*")).await.unwrap();
-    while let Some(item) = list.next().await {
+    // Figure out if the message passed DKIM auth for Return-Path
+    let mut do_dkim_auth = config.mode_dkim_auth;
 
-        info!("IMAP List item = {:?}", item.unwrap());
+    #[derive(Debug, Default)]
+    struct MboxCheck {
+        exists: bool,
     }
-    drop(list);
-     */
+
+    let mut ensure_mailboxes_exist: HashMap<String, MboxCheck> = HashMap::new();
+
+    // If DKIM Authenticated messages are to be moved - make sure the associated Mailbox exists
+    // The mailbox must be set in dkim_authenticated_move within the Configuration
+    // Consequently if do_dkim_auth was not set this will be set true if to be moved
+    match &config.dkim_authenticated_move {
+        Some(auth_outbox) => {
+            if !do_dkim_auth {
+                warn!("mode_dkim_auth was set to false - Turning to true due to dkim_authenticated_move set.");
+                do_dkim_auth = true;
+            }
+            info!("Will move DKIM Authenticated emails to mailbox {} - Checking the existence.", &auth_outbox);
+            ensure_mailboxes_exist.insert(auth_outbox.clone(), MboxCheck::default() );
+        }
+        None => info!("config.dkim_athenticated_move was not set - Will not move any DKIM Authenticated emails."),
+    }
+
+    // If DKIM Non-Authenticated messages are to be moved - make sure the associated Mailbox exists
+    // The mailbox must be set in dkim_unauthenticated_move within the Configuration
+    // Consequently if do_dkim_auth was not set this will be set true if to be moved
+    match &config.dkim_unauthenticated_move {
+        Some(unauth_outbox) => {
+            if !do_dkim_auth {
+                warn!("mode_dkim_auth was set to false - Turning to true due to dkim_unauthenticated_move set.");
+                do_dkim_auth = true;
+            }
+            info!("Will move DKIM Non-Authenticated emails to mailbox {} - Checking the existence.", &unauth_outbox);
+            ensure_mailboxes_exist.insert(unauth_outbox.clone(), MboxCheck::default() );
+        }
+        None => info!("config.dkim_unathenticated_move was not set - Will not move any DKIM Non-Authenticated emails."),
+    }
+
+    if !ensure_mailboxes_exist.is_empty() {
+        let mut list = fetch_session.list(Some("*"), Some("*")).await.unwrap();
+
+        while let Some(item) = list.next().await {
+            let saw = item.expect("Failed to fetch Mailbox list");
+            let saw_name = saw.name();
+            if let Some(ref mut mbox) = &mut ensure_mailboxes_exist.get_mut(saw_name) {
+                mbox.exists = true;
+            }
+        }
+        drop(list);
+
+        for (create_mailbox, check_status) in ensure_mailboxes_exist.iter() {
+            if !check_status.exists {
+                info!("Creating needed mailbox {}", &create_mailbox);
+                fetch_session.create(&create_mailbox).await?;
+            } else {
+                info!("Mailbox already exists {}", &create_mailbox);
+            }
+        }
+    }
 
     let idle_inbox = idle_session.select(&config.mailbox).await?;
     let _fetch_inbox = fetch_session.select(&config.mailbox).await?;
 
-    info!("IMAP Connecting Mailbox {}", &config.mailbox);
-
-    info!("IMAP idle_inbox = {:?}", idle_inbox);
+    info!("IMAP Connecting to Mailbox {}", &config.mailbox);
+    info!("IMAP idle_inbox cur = {:?}", idle_inbox);
 
     let mut idle_handle = idle_session.idle();
 
@@ -132,6 +200,8 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
         }
         drop(search);
 
+        let mut uid_moves: Vec<(String, String)> = vec![];
+
         for fetch_uid in &to_fetch {
             info!("Fetching UID {:?}", fetch_uid);
             let mut fetch_new = fetch_session
@@ -139,10 +209,15 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
                 .await?;
             while let Some(item_u) = fetch_new.next().await {
                 let mut rec = ImapEvent {
-                    uid: *fetch_uid,
+                    uid: fetch_uid.to_string(),
+                    dkim_authenticated: None,
+                    dkim_authenticated_error: None,
+                    moved_to: None,
                     flags: None,
                     body: None,
                     body_utf8_lossy: None,
+                    header_parsed: None,
+                    body_parsed: None,
                     header: None,
                     header_utf8_lossy: None,
                     text: None,
@@ -154,6 +229,27 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
                 let item = &item_u.unwrap();
 
                 if let Some(header) = item.header() {
+                    if config.mode_parser {
+                        let parsed = mail_parser::MessageParser::default().parse(header).unwrap();
+                        rec.header_parsed = Some(parsed);
+                    }
+                    if do_dkim_auth {
+                        let parsed = mail_parser::MessageParser::default().parse(header).unwrap();
+                        let auth_status = MessageAuthStatus::from_mail_parser(&parsed).unwrap();
+                        let verifier =
+                            ReturnPathVerifier::from_alloc_yes(&auth_status, &parsed).unwrap();
+                        match verifier.verify() {
+                            Ok(ReturnPathVerifierStatus::Pass) => {
+                                rec.dkim_authenticated = Some(true);
+                            }
+                            Ok(_) => {
+                                rec.dkim_authenticated = Some(false);
+                            }
+                            Err(e) => {
+                                rec.dkim_authenticated_error = Some(format!("{:?}", e));
+                            }
+                        }
+                    }
                     if config.mode_bytes {
                         rec.header = Some(header.into());
                     }
@@ -167,6 +263,10 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
                     rec.envelope = Some(imap_envelope);
                 }
                 if let Some(body) = &item.body() {
+                    if config.mode_parser {
+                        let parsed = mail_parser::MessageParser::default().parse(*body).unwrap();
+                        rec.body_parsed = Some(parsed);
+                    }
                     if config.mode_bytes {
                         rec.body = Some(body.to_vec());
                     }
@@ -179,8 +279,33 @@ async fn imap_loop(tx: Sender<String>, config: ImapSource) -> Result<()> {
                     rec.internaldate = Some(internal_date.to_rfc3339());
                 }
 
+                // Move the mail in case Authenticated destination folder is set
+                // and dkim_authenticated == true
+                if let Some(dkim_move_to) = &config.dkim_authenticated_move {
+                    if let Some(true) = rec.dkim_authenticated {
+                        rec.moved_to = Some(dkim_move_to.clone());
+                    }
+                }
+
+                // Move the mail in case Unauthenticated destination folder is set
+                // and dkim_authenticated == false
+                if let Some(dkim_move_to) = &config.dkim_unauthenticated_move {
+                    if let Some(false) = rec.dkim_authenticated {
+                        rec.moved_to = Some(dkim_move_to.clone());
+                    }
+                }
+
+                // Move the mail between Mailboxes
+                if let Some(ref move_to) = rec.moved_to {
+                    uid_moves.push((rec.uid.clone(), move_to.clone()));
+                }
+
                 tx.send(rec.try_into()?).await?;
             }
+        }
+
+        for (move_uid, move_to) in uid_moves.iter() {
+            fetch_session.uid_mv(move_uid, move_to).await?;
         }
 
         info!("IMAP Idling & Waiting for 5 minutes");

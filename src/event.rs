@@ -109,8 +109,14 @@ impl From<&&AsyncImapEnvelope<'_>> for ImapEnvelope {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct ImapEvent {
-    pub uid: u32,
+pub(crate) struct ImapEvent<'msg> {
+    pub uid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dkim_authenticated: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dkim_authenticated_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moved_to: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub internaldate: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -119,6 +125,10 @@ pub(crate) struct ImapEvent {
     pub body: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body_utf8_lossy: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", borrow)]
+    pub header_parsed: Option<mail_parser::Message<'msg>>,
+    #[serde(skip_serializing_if = "Option::is_none", borrow)]
+    pub body_parsed: Option<mail_parser::Message<'msg>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -138,7 +148,7 @@ pub enum ImapEventError {
     InternalConversion(String),
 }
 
-impl TryFrom<ImapEvent> for String {
+impl<'msg> TryFrom<ImapEvent<'msg>> for String {
     type Error = ImapEventError;
     fn try_from(event: ImapEvent) -> Result<Self, ImapEventError> {
         serde_json::to_string(&event).map_err(|e| ImapEventError::InternalConversion(e.to_string()))
