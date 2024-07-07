@@ -108,7 +108,7 @@ impl From<&&AsyncImapEnvelope<'_>> for ImapEnvelope {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub(crate) struct ImapEvent<'msg> {
     pub uid: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -140,6 +140,15 @@ pub(crate) struct ImapEvent<'msg> {
     pub envelope: Option<ImapEnvelope>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body_structure: Option<bool>,
+}
+
+impl<'msg> ImapEvent<'msg> {
+    pub fn new(uid: String) -> Self {
+        Self {
+            uid,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Error, Debug)]

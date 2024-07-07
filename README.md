@@ -20,6 +20,7 @@ Reads from IMAP and writes to Fluvio topic.
 | mode_dkim_auth      | false    | bool           | Output status of Authentication-Results dkim method pass or fail                                               |
 | dkim_authenticated_move | -    | String         | If the fetched new email has "Pass" status for Authentication-Results in DKIM method, move email into this Mailbox |
 | dkim_unauthenticated_move | -  | String         | If the fetched new email has "Fail" or "None" status instead in the DKIM method, move email into this Mailbox  |
+| idle_timeout        | 300      | u64            | In seconds, how many seconds idle timeout - shortening this may allow idling in short timeout servers          |
 | dangerous_cert      | false    | String         | DANGEROUS: Upon development / debugging skip TLS cert verify - true (default false)                            |
 
 Enable either mode_bytes or mode_utf8_lossy or both.

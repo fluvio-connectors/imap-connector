@@ -1,7 +1,7 @@
 use fluvio_connector_common::connector;
 
 #[connector(config, name = "imap")]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ImapConfig {
     pub host: String,
     pub port: String,
@@ -16,5 +16,11 @@ pub(crate) struct ImapConfig {
     pub mode_dkim_auth: bool,
     pub dkim_authenticated_move: Option<String>,
     pub dkim_unauthenticated_move: Option<String>,
+    #[serde(default = "default_idle")]
+    pub idle_timeout: u64,
     pub dangerous_cert: bool,
+}
+
+fn default_idle() -> u64 {
+    300
 }

@@ -1,5 +1,7 @@
 mod config;
 mod event;
+mod imap_util;
+mod record;
 mod source;
 
 use config::ImapConfig;
@@ -16,7 +18,7 @@ use source::ImapSource;
 #[connector(source)]
 async fn start(config: ImapConfig, producer: TopicProducer) -> Result<()> {
     debug!(?config);
-    let source = ImapSource::new(&config)?;
+    let source = ImapSource::new(config)?;
     let mut stream = source.connect(None).await?;
     while let Some(item) = stream.next().await {
         trace!(?item);
